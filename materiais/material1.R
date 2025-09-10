@@ -10,26 +10,27 @@ str(dados)
 
 ## instalando o pacote geoR (se necessÃ¡rio) e suas dependencias
 #install.packages("geoR", dep=TRUE)
+
 ## carregando o pacote geoR
 require(geoR)
+## convertendo para objeto da classe geodata 
 dG <- as.geodata(dados, coords.col=c(1,2), data.col=3)
 class(dG)
 
-## nomes de outros conjuntos de dados disponÃ­veis no pacote
+## nomes de conjuntos de dados disponÃ­veis no pacote
 data(package="geoR")
 
 ## visualizando os dados
 points(dG)
 args(points.geodata)
-points.geodata(dG,pt.div="quint")
-points.geodata(dG,pt.div="quint", cex.min=1, cex.max=1)
+points.geodata(dG, pt.div="quint")
+points.geodata(dG, pt.div="quint", cex.min=1, cex.max=1)
 
-## um resumo dos dados
+## Um resumo dos dados
 summary(dG)
-summary(dG, lambda=0)  
+summary(dG, lambda=0) ## trsnformaÃ§Ã£o log (Box-Cox)  
 dG	
 ## uma outra visualizaÃ§Ã£o dos dados
-x11()
 plot(dG)
 args(plot.geodata)
 plot(dG, lambda=0)
@@ -51,7 +52,6 @@ vC <- variog(dG, option="cloud")
 vC <- variog(dG, max.dist=100, option="cloud")	
 plot(vC)		
 
-x11()
 par(mfrow=c(2,2))
 v <- variog(dG, max.dist=100)	
 plot(v)		
@@ -67,11 +67,11 @@ par(mfrow=c(1,1))
 v <- variog(dG, uvec=seq(0, 80, by=10))	
 plot(v)		
 
-## envelope do variograma sob permutaÃ§Ã£o dos dados
+## envelope do variograma obtido sob permutaÃ§Ã£o dos dados
 v.mc <- variog.mc.env(dG, obj.variog=v)
 plot(v, env=v.mc)
 
-## "escolhendo" funcao de variograma (teÃ³rico)
+## "ajustando" funÃ§Ã£o de variograma (visualmente)
 v <- variog(dG, max.dist=80)	
 plot(v)		
 ef <- eyefit(v)
@@ -91,15 +91,37 @@ par(mfrow=c(2,2), mar=c(2,2,1,1))
 image(kc.ef)
 image(kc.ef, col=terrain.colors(21))
 image(kc.ef, col=gray(seq(1,0, l=21)))
-image(kc.ef, col=gray(seq(1,0, l=4)))
+image(kc.ef, col=gray(seq(1,0, l=5)))
 par(mfrow=c(1,1))
+
+## mais sobre palhetas de cores
+hcl.pals()
+image(kc.ef, col=hcl.colors(20, "viridis"))
+image(kc.ef, col=hcl.colors(20, "viridis", rev = TRUE))
+
+## para ver e escolher...
+par(mfcol=c(2,3), mar=c(2,2,3,1))
+for(i in hcl.pals()){
+    image(kc.ef, col=hcl.colors(20, i), main = i)
+    image(kc.ef, col=hcl.colors(20, i, rev = TRUE), main = paste(i, "rev"))
+    Sys.sleep(3)
+}
+par(mfrow=c(1,1))
+
+## ComentÃ¡rio: paletas "robustas"
+par(mfrow=c(2,3), mar=c(2,2,3,1))
+image(kc.ef, col=hcl.colors(20, "Blues 3", rev = TRUE))
+image(kc.ef, col=hcl.colors(20, "YlGnBu", rev = TRUE))
+image(kc.ef, col=hcl.colors(20, "Viridis", rev = TRUE))
+##
+image(kc.ef, col=hcl.colors(20, "Purple-Green", rev = TRUE))
+image(kc.ef, col=hcl.colors(20, "Blue-Red 3"))
+par(mfrow=c(1,1))
+
 
 summary(kc.ef$predict)
 image(kc.ef, col=terrain.colors(4), breaks=c(0, 30, 80, 100, 150))
-
 image(kc.ef, val = sqrt(kc.ef$krige.var), coords.data=dG$coords)
-
-
 ##
 ## Fim da anÃ¡lise inicial/bÃ¡sica
 ##
@@ -111,12 +133,14 @@ plot(v)
 ef <- eyefit(v)  ## ajustar e salvar 3 escolhas diferentes de modelos
 ef
 
+
 vf1 <- variofit(v, ini=ef[[1]])
 vf1
 vf2 <- variofit(v, ini=ef[[2]])
 vf2
 vf3 <- variofit(v, ini=ef[[3]])
 vf3
+## ?variofit  para mais opÃ§Ãµes e sobre a funÃ§Ã£o
 
 par(mfrow=c(1,3))
 plot(v)
@@ -132,64 +156,69 @@ lines(ef[[3]], col=2)
 lines(vf3, col=4)
 par(mfrow=c(1,1))
 
+## outro envelope: de model ajustado
+vf1.env <- variog.model.env(dG, obj.variog = v, model.pars = vf1)
+plot(v)
+lines(vf1)
+lines(vf1.env)
 
 ## estimando a media
 ONES <- rep(1, nrow(dados))
 D <- as.matrix(dist(dG$coords))
 names(vf1)
 vf1$cov.pars
+## supondo que vÃ¡ usar o modelo exponencial
 SIGMA <- with(vf1, nugget * diag(nrow(dados)) + cov.pars[1] * exp(-D/cov.pars[2]))
 dim(SIGMA)
+## $\hat{\mu} = (1'\Sigma^{-1}1)^{-1} 1'\Sigma^{-1}y$
 iS.ONES <- solve(SIGMA, ONES)
 (mu.gls <- solve(crossprod(iS.ONES, ONES), crossprod(iS.ONES, dG$data)))
+## ou ...
+(mu.gls <- sum(iS.ONES * dG$data)/sum(iS.ONES))
+mean(dG$data)
 
-## funÃ§Ã£o de (Log)verossimilhanÃ§a (escrita e forma ingenua)
-ltheta <- function(pars, gd, printpars=FALSE){    
-    ## pars = mu, sigma, phi, tau
-    n <- nrow(gd$coords)
-    D <- as.matrix(dist(gd$coords, upper=T, diag=T))
-    SIGMA <- pars[4]^2 * diag(n) + pars[2]^2 * exp(-D/pars[3])
-    logdetS <-  determinant(SIGMA, log=TRUE)$modulus
-    res <- gd$data - pars[1]
-    Q <- crossprod(res, solve(SIGMA, res))
-    logVero <- -0.5*(n*log(2*pi) + logdetS + Q)
-    if(printpars) print(c(pars, logVero))
-    return(logVero)
-}
+rm(ONES,D,SIGMA,iS.ONES)
 
-lthetaConc <- function(pars, gd, printpars=FALSE){    
-    ## pars : phi e nu = tau/sigma
-    n <- nrow(gd$coords)
-    D <- as.matrix(dist(gd$coords, upper=T, diag=T))
-    SIGMA <- pars[1]^1 * diag(n) + exp(-D/pars[1])
-    logdetS <-  determinant(SIGMA, log=TRUE)$modulus
-    #mu <- 
-        res <- gd$data - pars[1]
-    Q <- crossprod(res, solve(SIGMA, res))
-    logVero <- -0.5*(n*log(2*pi) + logdetS + Q)
-    if(printpars) print(c(pars, logVero))
-    return(logVero)
-}
-
+## Fazendo FunÃ§Ã£o para calcular mÃ©dia a partir de um modelo ajustado
 names(vf1)
-(pars.vf1 <- with(vf1, 
-                  c(mu.gls, sqrt(cov.pars[1]), cov.pars[2], sqrt(nugget))))
+args(cov.spatial)
+args(varcov.spatial)
 
-ltheta(pars.vf1, gd = dG)
-ltheta(c(50, 15, 20, 0), gd = dG)
+mu.fun <- function(fit, geodata){
+    ONES <- rep(1, nrow(geodata$coords))
+    SIG <- with(fit,
+                varcov.spatial(coords = geodata$coords,
+                               cov.model = cov.model,
+                               nugget = nugget,
+                               cov.pars = cov.pars))$varcov
+    iSIG.ONES <- solve(SIG, ONES)
+    return(sum(iSIG.ONES * dG$data)/sum(iSIG.ONES))
+}
+mu.fun(vf1, dG)
+mu.fun(vf2, dG)
+mu.fun(vf3, dG)
+mean(dG$data)
 
-args(optim)
-
-parsML <- optim(c(50, 15, 20, 0), ltheta, gd = dG, printpars=T, 
-                method="L-BFGS-B", lower=c(-Inf, 0, 0, 0), 
-                control=list(fnscale=-1))         
-parsML$par^c(1,2,1,2)
-mu.gls
-vf1
-
+## estimativa por mÃ¡xima verossimilhanÃ§a
 ## usando a funcao da geoR
 ml <- likfit(dG, ini=c(300, 20))
 ml
+mu.fun(ml, dG)
+
+## calculando a verossimilhanca de um ajuste variofit
+loglik.GRF(dG, obj.model = ml)
+loglik.GRF(dG, obj.model = vf1)
+loglik.GRF(dG, obj.model = vf2)
+loglik.GRF(dG, obj.model = vf3)
+
+## voltando a variogramas
+plot(v)
+lines(ml, col="blue")
+lines(vf1, col="red")
+lines(vf2, col="green")
+lines(vf3, col="black")
+legend("topleft", legend=c("ml","vf1","vf2","vf3"),
+       col=c("blue","red","green","black"), lty=1)
 
 ## definindo um "grid" de prediÃ§Ã£o
 gr <- expand.grid(seq(0,100, len=51), seq(0,100, len=51))
@@ -258,14 +287,6 @@ image(kc.vf1, val=sqrt(kc.vf1$krige.var), coords.data=dG$coords, zlim=ZL)
 image(kc.vf2, val=sqrt(kc.vf2$krige.var), coords.data=dG$coords, zlim=ZL)
 image(kc.ml, val=sqrt(kc.ml$krige.var), coords.data=dG$coords, zlim=ZL)
 par(mfrow=c(1,1))
-
-## voltando a variogramas
-plot(v)
-lines(ml, col="blue")
-lines(vf1, col="red")
-lines(vf2, col="green")
-legend("topleft", legend=c("ml","vf1","vf2"),
-       col=c("blue","red","green"), lty=1)
 
 par(mfrow=c(1,3))
 plot(kc.ml$pred, kc.vf1$pred, asp = 1); abline(0,1)
